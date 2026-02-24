@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLASSIFIED - OSINT MONITORING NETWORK</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --intel-dark: #0a0e27;
+            --intel-blue: #00d4ff;
+            --intel-green: #00ff41;
+            --intel-red: #ff0055;
+            --intel-orange: #ffaa00;
+            --classified-red: #c41e3a;
+            --top-secret: #8b0000;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: var(--intel-dark);
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            letter-spacing: 0.05em;
+        }
+
+        /* Classification Headers */
+        .classification-header {
+            background: linear-gradient(90deg, #c41e3a, #8b0000, #c41e3a);
+            padding: 0.375rem;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #ffffff;
+            border-bottom: 2px solid #c41e3a;
+            box-shadow: 0 0 15px rgba(196, 30, 58, 0.5);
+        }
+
+        .classification-footer {
+            background: linear-gradient(90deg, #c41e3a, #8b0000, #c41e3a);
+            padding: 0.375rem;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: #ffffff;
+            border-top: 2px solid #c41e3a;
+            box-shadow: 0 0 15px rgba(196, 30, 58, 0.5);
+        }
+
+        #root {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .map-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* Grid Overlay */
+        #map::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 28px;
+            background-image: 
+                linear-gradient(0deg, transparent 24%, rgba(0, 212, 255, 0.03) 25%, rgba(0, 212, 255, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 212, 255, 0.03) 75%, rgba(0, 212, 255, 0.03) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(0, 212, 255, 0.03) 25%, rgba(0, 212, 255, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 212, 255, 0.03) 75%, rgba(0, 212, 255, 0.03) 76%, transparent 77%, transparent);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .glass-panel {
+            background: rgba(10, 14, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            border-radius: 0.375rem;
+            box-shadow: 
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                0 8px 32px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+            pointer-events: none;
+        }
+
+        .glow-blue {
+            box-shadow: 
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                0 8px 32px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(0, 212, 255, 0.15);
+        }
+
+        .glow-red {
+            box-shadow: 
+                inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                0 8px 32px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(255, 0, 85, 0.15);
+        }
+
+        /* Subtle scan line effect */
+        @keyframes scanlines {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        /* CIA Logo Animations */
+        @keyframes fadeInScale {
+            0% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes fadeOutScale {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.8); }
+        }
+
+        @keyframes fadeInSlideDown {
+            0% { opacity: 0; transform: translateY(-30px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: rgba(0, 212, 255, 0.05);
+            animation: scanlines 8s linear infinite;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .cia-logo {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10000;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .cia-logo-text {
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: var(--intel-green);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 30px rgba(0, 255, 65, 0.4);
+            animation: fadeInScale 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .cia-user-tag {
+            font-size: 1.2rem;
+            color: var(--intel-green);
+            letter-spacing: 0.05em;
+            font-family: 'Courier New', monospace;
+            margin-top: 0.75rem;
+            font-weight: 600;
+        }
+
+        .cia-seal {
+            font-size: 4rem;
+            margin-bottom: 0.5rem;
+            animation: fadeInScale 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s backwards;
+        }
+
+        /* Map Controls */
+        .map-header {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            z-index: 10;
+            padding: 0.75rem 1rem;
+            max-width: 320px;
+        }
+
+        .map-header h1 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--intel-blue);
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .map-header p {
+            font-size: 0.65rem;
+            color: #8b92ac;
+            letter-spacing: 0.03em;
+        }
+
+        .map-legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            z-index: 10;
+            padding: 0.75rem;
+        }
+
+        .map-legend h3 {
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--intel-blue);
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.7rem;
+            margin-bottom: 0.25rem;
+            color: #b4b9c8;
+            letter-spacing: 0.01em;
+        }
+
+        .legend-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 50%;
+        }
+
+        .map-controls {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.5rem;
+        }
+
+        .control-btn {
+            padding: 0.5rem;
+            background: rgba(10, 14, 39, 0.7);
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            color: var(--intel-blue);
+            cursor: pointer;
+            border-radius: 0.25rem;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        .coordinates {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 10;
+            padding: 0.75rem;
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+
+        /* System Status Bar */
+        .status-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: rgba(10, 14, 39, 0.95);
+            border-top: 1px solid rgba(0, 212, 255, 0.15);
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+            font-size: 0.65rem;
+            letter-spacing: 0.05em;
+            z-index: 5;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-right: 1.5rem;
+            color: #8b92ac;
+        }
+
+        .status-indicator {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: var(--intel-green);
+            animation: blink 1s infinite;
+        }
+
+        .status-indicator.active {
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 49%, 100% { opacity: 1; }
+            50%, 99% { opacity: 0.3; }
+        }
+
+        .utc-clock {
+            margin-left: auto;
+            color: var(--intel-blue);
+            font-weight: 500;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 24rem;
+            height: 100vh;
+            background: var(--intel-dark);
+            border-left: 1px solid rgba(0, 212, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+        }
+
+        .sidebar-header h2 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--intel-blue);
+            margin-bottom: 0.375rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .sidebar-header p {
+            font-size: 0.65rem;
+            color: #8b92ac;
+            letter-spacing: 0.03em;
+        }
+
+        .sidebar-location {
+            color: var(--intel-green);
+        }
+
+        /* Tabs */
+        .tab-nav {
+            display: flex;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+            padding: 0 0.5rem;
+            padding-top: 0.5rem;
+        }
+
+        .tab-btn {
+            padding-bottom: 0.35rem;
+            padding-left: 0.4rem;
+            padding-right: 0.4rem;
+            font-size: 0.62rem;
+            font-weight: 600;
+            border: none;
+            background: none;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-bottom: 2px solid transparent;
+            letter-spacing: 0.01em;
+            text-transform: uppercase;
+        }
+
+        .tab-btn:hover {
+            color: #9ca3af;
+        }
+
+        .tab-btn.active {
+            color: var(--intel-blue);
+            border-bottom-color: var(--intel-blue);
+        }
+
+        /* Content */
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Cards */
+        .card {
+            padding: 0.625rem 0.75rem;
+            margin-bottom: 0.625rem;
+            border-radius: 0.375rem;
+            border: 1px solid rgba(0, 212, 255, 0.1);
+            background: rgba(10, 14, 39, 0.6);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+            pointer-events: none;
+        }
+
+        .card:hover {
+            border-color: rgba(0, 212, 255, 0.2);
+            background: rgba(10, 14, 39, 0.7);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .card-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--intel-blue);
+            margin-bottom: 0.375rem;
+            line-height: 1.3;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .card-description {
+            font-size: 0.7rem;
+            color: #b4b9c8;
+            margin-bottom: 0.375rem;
+            line-height: 1.35;
+        }
+
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.65rem;
+            color: #8b92ac;
+            letter-spacing: 0.02em;
+        }
+
+        .badge {
+            padding: 0.125rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.65rem;
+            font-weight: bold;
+            margin-left: 0.5rem;
+        }
+
+        .badge-positive {
+            background: rgba(0, 255, 65, 0.2);
+            color: var(--intel-green);
+        }
+
+        .badge-negative {
+            background: rgba(255, 0, 85, 0.2);
+            color: var(--intel-red);
+        }
+
+        .badge-neutral {
+            background: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+        }
+
+        /* Weather */
+        .weather-temp {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(0, 212, 255, 0.05);
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .weather-temp-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--intel-green);
+        }
+
+        .weather-temp-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .weather-condition {
+            font-size: 0.75rem;
+            color: #a0aec0;
+        }
+
+        .weather-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .weather-stat {
+            background: rgba(0, 212, 255, 0.1);
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+        }
+
+        .weather-stat-label {
+            font-size: 0.7rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
+        }
+
+        .weather-stat-value {
+            font-size: 1.125rem;
+            font-weight: bold;
+            color: var(--intel-blue);
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 0.625rem 0.75rem;
+            margin-bottom: 0.625rem;
+            border-radius: 0.375rem;
+            border-left: 2px solid;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .alert::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            pointer-events: none;
+        }
+
+        .alert-critical {
+            background: rgba(255, 0, 85, 0.08);
+            border-left-color: var(--intel-red);
+        }
+
+        .alert-warning {
+            background: rgba(255, 170, 0, 0.08);
+            border-left-color: var(--intel-orange);
+        }
+
+        .alert-info {
+            background: rgba(0, 212, 255, 0.08);
+            border-left-color: var(--intel-blue);
+        }
+
+        .alert-level {
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-bottom: 0.375rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .alert-critical .alert-level {
+            color: var(--intel-red);
+        }
+
+        .alert-warning .alert-level {
+            color: var(--intel-orange);
+        }
+
+        .alert-info .alert-level {
+            color: var(--intel-blue);
+        }
+
+        .alert-message {
+            font-size: 0.7rem;
+            color: #d1d5db;
+            margin-bottom: 0.375rem;
+            line-height: 1.3;
+        }
+
+        .alert-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.65rem;
+            color: #8b92ac;
+            letter-spacing: 0.02em;
+        }
+
+        /* AI Summary */
+        .summary-text {
+            font-size: 0.7rem;
+            line-height: 1.5;
+            color: #b4b9c8;
+            margin-bottom: 0.75rem;
+            font-weight: 400;
+        }
+
+        .confidence-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 0.75rem;
+            background: rgba(0, 255, 65, 0.08);
+            border: 1px solid rgba(0, 255, 65, 0.15);
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .confidence-label {
+            font-size: 0.65rem;
+            color: #8b92ac;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            font-weight: 600;
+        }
+
+        .confidence-outer {
+            flex: 1;
+            height: 3px;
+            background: rgba(0, 255, 65, 0.15);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-inner {
+            height: 100%;
+            background: var(--intel-green);
+            transition: width 0.5s ease;
+            box-shadow: 0 0 8px rgba(0, 255, 65, 0.5);
+        }
+
+        .confidence-value {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--intel-green);
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .threat-list, .opportunity-list {
+            padding: 0.625rem 0.75rem;
+            margin-bottom: 0.75rem;
+            border-radius: 0.375rem;
+            border-left: 2px solid;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .threat-list::before, .opportunity-list::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            pointer-events: none;
+        }
+
+        .threat-list {
+            background: rgba(255, 0, 85, 0.08);
+            border-left-color: var(--intel-red);
+        }
+
+        .opportunity-list {
+            background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--intel-green);
+        }
+
+        .threat-list h4, .opportunity-list h4 {
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .threat-list h4 {
+            color: var(--intel-red);
+        }
+
+        .opportunity-list h4 {
+            color: var(--intel-green);
+        }
+
+        .threat-list li, .opportunity-list li {
+            font-size: 0.7rem;
+            margin-bottom: 0.25rem;
+            color: #b4b9c8;
+            margin-left: 1.25rem;
+            line-height: 1.35;
+        }
+
+        /* Skeleton loader */
+        .skeleton {
+            background: linear-gradient(
+                90deg,
+                rgba(0, 212, 255, 0.1) 25%,
+                rgba(0, 212, 255, 0.2) 50%,
+                rgba(0, 212, 255, 0.1) 75%
+            );
+            background-size: 1000px 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 212, 255, 0.5);
+        }
+
+        /* Mapbox popup customization */
+        .mapboxgl-popup-content {
+            background: rgba(10, 14, 39, 0.95);
+            color: #ffffff;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+            border-radius: 0.5rem;
+        }
+
+        .mapboxgl-popup-tip {
+            border-top-color: rgba(10, 14, 39, 0.95);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.2); }
+        }
+
+        .marker {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <!-- SYSTEM ARCHITECT CREDIT -->
+    <div style="position: fixed; top: 1.5rem; right: 1rem; font-size: 0.65rem; color: #6b7280; letter-spacing: 0.02em; text-align: right; z-index: 1000;">
+        <div style="color: var(--intel-green); font-weight: 600;">SYSTEM ARCHITECT</div>
+        <div style="color: #8b92ac;">Abdulrahman Alshouly</div>
+    </div>
+
+    <!-- RESTRICTED ACCESS MODAL -->
+    <div id="access-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+        <div style="background: linear-gradient(135deg, rgba(10, 14, 39, 0.98), rgba(20, 24, 52, 0.98)); border: 3px solid #c41e3a; border-radius: 0.5rem; padding: 2rem; max-width: 600px; text-align: center; box-shadow: 0 0 40px rgba(196, 30, 58, 0.6);">
+            <div style="font-size: 1.2rem; color: #c41e3a; font-weight: 900; margin-bottom: 1rem; letter-spacing: 0.15em; text-transform: uppercase;">⚠️ RESTRICTED SYSTEM</div>
+            
+            <div style="background: rgba(255, 0, 85, 0.15); border: 2px solid #c41e3a; border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+                <div style="font-size: 0.9rem; color: #ff6b9d; line-height: 1.6; font-weight: 600; letter-spacing: 0.05em;">
+                    🔐 CLASSIFIED INTELLIGENCE SYSTEM<br><br>
+                    UNAUTHORIZED ACCESS IS STRICTLY PROHIBITED<br><br>
+                    This system is exclusively authorized for:<br>
+                    <span style="color: var(--intel-green); font-size: 1rem; margin-top: 0.75rem; display: block;">✓ CIA PERSONNEL</span>
+                    <span style="color: var(--intel-green); font-size: 1rem; margin: 0.5rem 0;">✓ ABDULRAHMAN ALSHOULY</span><br>
+                    <span style="color: #ff6b9d; font-size: 0.85rem;">All other users are DENIED ACCESS</span>
+                </div>
+            </div>
+
+            <div style="background: rgba(196, 30, 58, 0.2); border-left: 4px solid #c41e3a; padding: 1rem; margin-bottom: 1.5rem; text-align: left;">
+                <div style="font-size: 0.75rem; color: #8b92ac; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">SECURITY WARNING</div>
+                <div style="font-size: 0.75rem; color: #b4b9c8; line-height: 1.5;">
+                    • Unauthorized use is a FEDERAL CRIME<br>
+                    • All access is MONITORED & LOGGED<br>
+                    • Unauthorized disclosure = PROSECUTION<br>
+                    • This system contains CLASSIFIED INTELLIGENCE<br>
+                    • Violation of USC Title 18 Section 793
+                </div>
+            </div>
+
+            <button onclick="document.getElementById('access-modal').style.display='none';" style="padding: 0.75rem 2rem; background: var(--intel-green); border: none; color: var(--intel-dark); font-weight: 700; font-size: 0.8rem; border-radius: 0.375rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s;">
+                ✓ I ACKNOWLEDGE RESTRICTIONS
+            </button>
+
+            <div style="font-size: 0.65rem; color: #6b7280; margin-top: 1rem; letter-spacing: 0.02em;">
+                System Protected by Abdulrahman Alshouly | Classification: TOP SECRET//NOFORN
+            </div>
+        </div>
+    </div>
+
+    <div id="root">
+        <!-- TOP CLASSIFICATION BANNER -->
+        <div class="classification-header">
+            ⚠️ CLASSIFIED [TOP SECRET//NOFORN] - AUTHORIZED PERSONNEL ONLY ⚠️
+        </div>
+
+        <div class="dashboard">
+            <!-- CIA Logo Splash -->
+            <div class="cia-logo" id="cia-splash" style="animation: fadeInScale 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                <div class="cia-seal">🛡️</div>
+                <div class="cia-logo-text">CIA OSINT</div>
+                <div style="font-size: 0.8rem; color: #555555; letter-spacing: 0.1em; margin-top: 0.5rem; opacity: 0.9;">INTELLIGENCE DIVISION</div>
+                <div class="cia-user-tag">@3bd_dev_</div>
+            </div>
+
+            <!-- Map Container -->
+            <div class="map-container">
+                <div id="map"></div>
+
+                <!-- Map Header -->
+                <div class="glass-panel map-header glow-blue">
+                    <div style="font-size: 0.6rem; color: var(--classified-red); font-weight: 700; margin-bottom: 0.25rem; letter-spacing: 0.1em;">CLASSIFIED [TOP SECRET]</div>
+                    <h1>OSINT MONITORING NETWORK</h1>
+                    <p>Global Intelligence Collection & Analysis System</p>
+                    <div style="font-size: 0.6rem; color: var(--classified-red); font-weight: 700; margin-top: 0.25rem; letter-spacing: 0.1em;">NOFORN - AUTHORIZED USERS ONLY</div>
+                </div>
+
+                <!-- Map Legend -->
+                <div class="glass-panel map-legend">
+                    <h3>ASSET CLASSIFICATION</h3>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background-color: var(--intel-red);"></div>
+                        <span>THREAT LEVEL HIGH</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background-color: var(--intel-blue);"></div>
+                        <span>FINANCIAL TRACKING</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background-color: var(--intel-green);"></div>
+                        <span>POLITICAL PRIORITY</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background-color: var(--intel-orange);"></div>
+                        <span>ENVIROMENT SECTOR</span>
+                    </div>
+                </div>
+
+                <!-- Map Controls -->
+                <div class="map-controls">
+                    <button class="control-btn" onclick="zoomIn()" title="Zoom In">+</button>
+                    <button class="control-btn" onclick="zoomOut()" title="Zoom Out">−</button>
+                    <button class="control-btn" onclick="resetMap()" title="Reset">⟲</button>
+                </div>
+
+                <!-- Coordinates -->
+                <div class="glass-panel coordinates">
+                    <p id="coordinates">Select a location</p>
+                </div>
+
+                <!-- System Status Bar -->
+                <div class="status-bar">
+                    <div class="status-item">
+                        <span class="status-indicator active"></span>
+                        <span>ONLINE</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-indicator"></span>
+                        <span>SIGNAL: 92%</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-indicator"></span>
+                        <span>DATAFLOW: ACTIVE</span>
+                    </div>
+                    <div class="utc-clock" id="utc-clock">--:-- UTC</div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div style="font-size: 0.6rem; color: var(--classified-red); font-weight: 700; margin-bottom: 0.25rem; letter-spacing: 0.1em;">CLASSIFIED [TOP SECRET]</div>
+                    <h2>INTELLIGENCE OPERATIONS CENTER</h2>
+                    <p>Sector: <span class="sidebar-location" id="sidebar-location">GLOBAL</span> | STATUS: <span style="color: var(--intel-green);">ACTIVE</span></p>
+                    <div style="font-size: 0.6rem; color: var(--classified-red); font-weight: 700; margin-top: 0.25rem; letter-spacing: 0.1em;">NOFORN//NOCONTRACT</div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="tab-nav">
+                    <button class="tab-btn active" onclick="switchTab('news')">FIELD REPORTS</button>
+                    <button class="tab-btn" onclick="switchTab('weather')">ENVIROMENT</button>
+                    <button class="tab-btn" onclick="switchTab('alerts')">THREAT LEVEL</button>
+                    <button class="tab-btn" onclick="switchTab('ai')">ANALYSIS</button>
+                    <button class="tab-btn" onclick="switchTab('search')">ASSET SEARCH</button>
+                    <button class="tab-btn" onclick="switchTab('insta')">INSTA SEARCH</button>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="sidebar-content">
+                    <!-- News Feed -->
+                    <div id="news" class="tab-content active"></div>
+
+                    <!-- Weather Panel -->
+                    <div id="weather" class="tab-content"></div>
+
+                    <!-- Alerts Panel -->
+                    <div id="alerts" class="tab-content"></div>
+
+                    <!-- AI Summary -->
+                    <div id="ai" class="tab-content"></div>
+
+                    <!-- Asset Search -->
+                    <div id="search" class="tab-content"></div>
+
+                    <!-- Insta Search (mock/social DB) -->
+                    <div id="insta" class="tab-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script>
+        // Configuration
+        // WICHTIG: Geben Sie hier Ihren eigenen Mapbox Token ein!
+        // Token kostenlos hier erhalten: https://account.mapbox.com/tokens/
+        mapboxgl.accessToken = 'pk.eyJ1IjoiYWxzaG91bHkxMjAiLCJhIjoiY21tMHp4cmxlMDRkYzJwc2puYW1nOGw0bSJ9.oaXy4gHkEQP0Bl4h47fmsg';
+        
+        if (!mapboxgl.accessToken || mapboxgl.accessToken.includes('YOUR_TOKEN')) {
+            console.error('❌ MAPBOX TOKEN FEHLT!');
+            console.error('1. Gehen Sie zu: https://account.mapbox.com/tokens/');
+            console.error('2. Melden Sie sich an (kostenlos)');
+            console.error('3. Erstellen Sie einen neuen Token');
+            console.error('4. Kopieren Sie den Token hier in Zeile 816');
+        }
+        
+        let map;
+        let selectedLocation = null;
+        let markers = {};
+        let searchMarker = null;
+
+        // Mock phone number database - GLOBAL CITIES
+        const phoneDatabase = {
+            '+49301234567': { name: 'Alexander Schmidt', address: 'Kurfürstendamm 42, 10711 Berlin', city: 'Berlin', coordinates: [52.52, 13.405], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 3600000), category: 'PERSON OF INTEREST', height: '1.82m', siblings: ['Michael Schmidt', 'Lisa Schmidt'] },
+            '+44207946000': { name: 'James Mitchell', address: '10 Downing Street, Westminster, London', city: 'London', coordinates: [51.5074, -0.1278], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 7200000), category: 'OFFICIAL CONTACT', height: '1.88m', siblings: ['Robert Mitchell', 'Emma Mitchell', 'George Mitchell'] },
+            '+33142341234': { name: 'Marie Dubois', address: 'Avenue des Champs-Élysées 128, 75008 Paris', city: 'Paris', coordinates: [48.8566, 2.3522], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 1800000), category: 'MONITORED ASSET', height: '1.70m', siblings: ['Pierre Dubois'] },
+            '+1 212 555 0123': { name: 'Robert Thompson', address: '350 5th Avenue, New York, NY 10118', city: 'New York', coordinates: [40.7128, -74.006], riskLevel: 'CRITICAL', lastSeen: new Date(Date.now() - 600000), category: 'HIGH PRIORITY TARGET', height: '1.85m', siblings: ['Jennifer Thompson', 'David Thompson', 'Sarah Thompson', 'Michael Thompson'] },
+            '+81 3 1234 5678': { name: 'Yuki Tanaka', address: 'Shibuya-ku, Dogenzaka 1-chome, Tokyo 150-0043', city: 'Tokyo', coordinates: [35.6762, 139.6503], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 10800000), category: 'COMMERCIAL CONTACT', height: '1.75m', siblings: ['Kenji Tanaka', 'Aiko Tanaka'] },
+            '+61 2 9374 5000': { name: 'Sarah Williams', address: 'Martin Place, Sydney NSW 2000', city: 'Sydney', coordinates: [-33.8688, 151.2093], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 5400000), category: 'ROUTINE SURVEILLANCE', height: '1.68m', siblings: ['Thomas Williams'] },
+            '+34 91 123 4567': { name: 'Carlos Rodriguez', address: 'Gran Vía 25, 28013 Madrid', city: 'Madrid', coordinates: [40.4168, -3.7038], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 2700000), category: 'MONITORED ASSET', height: '1.80m', siblings: ['Antonio Rodriguez', 'Felipe Rodriguez'] },
+            '+39 06 1234 5678': { name: 'Giovanni Ferrari', address: 'Via Veneto 120, 00187 Roma', city: 'Rome', coordinates: [41.9028, 12.4964], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 4500000), category: 'ROUTINE SURVEILLANCE', height: '1.78m', siblings: ['Marco Ferrari', 'Lucia Ferrari', 'Giovanna Ferrari'] },
+            '+31 20 345 6789': { name: 'Hans van der Berg', address: 'Dam 1, 1012 NP Amsterdam', city: 'Amsterdam', coordinates: [52.3676, 4.9041], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 8100000), category: 'PERSON OF INTEREST', height: '1.90m', siblings: ['Erik van der Berg'] },
+            '+41 44 123 4567': { name: 'Klaus Mueller', address: 'Bahnhofstrasse 1, 8001 Zurich', city: 'Zurich', coordinates: [47.3769, 8.5472], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 6300000), category: 'FINANCIAL TRACKING', height: '1.76m', siblings: ['Stefan Mueller', 'Anna Mueller', 'Thomas Mueller'] },
+            '+1 212 555 0987': { name: 'Jennifer Walsh', address: '1 Times Square, New York, NY 10036', city: 'New York', coordinates: [40.758, -73.9855], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 900000), category: 'THREAT ASSESSMENT', height: '1.72m', siblings: ['Patrick Walsh', 'Maureen Walsh'] },
+            '+1 310 555 1234': { name: 'Michael Chen', address: '6922 Hollywood Blvd, Los Angeles, CA 90028', city: 'Los Angeles', coordinates: [34.0522, -118.2437], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 1200000), category: 'ENTERTAINMENT SECTOR', height: '1.73m', siblings: ['Wei Chen', 'June Chen', 'David Chen'] },
+            '+1 312 555 5678': { name: 'Patricia Johnson', address: '360 N Michigan Ave, Chicago, IL 60601', city: 'Chicago', coordinates: [41.8781, -87.6298], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 2400000), category: 'ROUTINE SURVEILLANCE', height: '1.67m', siblings: ['William Johnson'] },
+            '+1 713 555 0123': { name: 'David Martinez', address: '609 Main St, Houston, TX 77002', city: 'Houston', coordinates: [29.7604, -95.3698], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 3300000), category: 'ENERGY SECTOR', height: '1.81m', siblings: ['Juan Martinez', 'Rosa Martinez', 'Miguel Martinez'] },
+            '+1 602 555 7890': { name: 'Linda Davis', address: '100 S Central Ave, Phoenix, AZ 85004', city: 'Phoenix', coordinates: [33.4484, -112.0742], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 5100000), category: 'ADMINISTRATIVE', height: '1.65m', siblings: ['Kenneth Davis'] },
+            '+1 215 555 2468': { name: 'Richard Anderson', address: '1500 Market St, Philadelphia, PA 19102', city: 'Philadelphia', coordinates: [39.9526, -75.1652], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 4200000), category: 'MONITORED ASSET', height: '1.79m', siblings: ['James Anderson', 'Elizabeth Anderson'] },
+            '+1 619 555 1357': { name: 'Susan Taylor', address: '100 Harbor Drive, San Diego, CA 92101', city: 'San Diego', coordinates: [32.7157, -117.1611], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 6600000), category: 'ROUTINE SURVEILLANCE', height: '1.71m', siblings: ['Charles Taylor'] },
+            '+1 206 555 8642': { name: 'Thomas Wilson', address: '401 5th Ave, Seattle, WA 98104', city: 'Seattle', coordinates: [47.6062, -122.3321], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 7500000), category: 'TECH SECTOR', height: '1.83m', siblings: ['George Wilson', 'Nancy Wilson'] },
+            '+1 480 555 3690': { name: 'Betty Moore', address: '333 N Central Ave, Phoenix, AZ 85004', city: 'Phoenix', coordinates: [33.4484, -112.0742], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 8700000), category: 'ADMINISTRATIVE', height: '1.66m', siblings: ['John Moore'] },
+            '+44 121 345 6789': { name: 'Elizabeth Brown', address: 'Bullring Shopping Centre, Birmingham B5 4BX', city: 'Birmingham', coordinates: [52.5073, -1.8844], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 2100000), category: 'COMMERCIAL CONTACT', height: '1.69m', siblings: ['Henry Brown', 'Alice Brown', 'Edward Brown'] },
+            '+49 69 1234 5678': { name: 'Friedrich Weber', address: 'Main Tower, Neue Mainzer Str 52-58, Frankfurt', city: 'Frankfurt', coordinates: [50.1109, 8.6821], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 1500000), category: 'FINANCIAL TRACKING', height: '1.84m', siblings: ['Otto Weber'] },
+            '+49 40 1234 5678': { name: 'Petra Hansen', address: 'Jungfernstieg 1, 20354 Hamburg', city: 'Hamburg', coordinates: [53.5511, 9.9937], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 3900000), category: 'PORT AUTHORITY', height: '1.72m', siblings: ['Klaus Hansen', 'Ingrid Hansen'] },
+            '+39 02 1234 5678': { name: 'Marco Rossi', address: 'Piazza del Duomo, 20122 Milano', city: 'Milan', coordinates: [45.4642, 9.1900], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2700000), category: 'FASHION INDUSTRY', height: '1.77m', siblings: ['Angelo Rossi'] },
+            '+34 93 123 4567': { name: 'José García', address: 'Passeig de Gràcia 43, 08007 Barcelona', city: 'Barcelona', coordinates: [41.3851, 2.1734], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 4800000), category: 'TOURISM SECTOR', height: '1.80m', siblings: ['Miguel García', 'Carmen García', 'Francisco García'] },
+            '+43 1 123 4567': { name: 'Wolfgang Schneider', address: 'Stephansplatz 1, 1010 Wien', city: 'Vienna', coordinates: [48.2082, 16.3738], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 5700000), category: 'DIPLOMATIC', height: '1.75m', siblings: ['Gerhard Schneider'] },
+            '+32 2 345 6789': { name: 'Anne Petit', address: 'Grand Place, 1000 Bruxelles', city: 'Brussels', coordinates: [50.8503, 4.3517], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 3600000), category: 'EU INSTITUTIONS', height: '1.68m', siblings: ['Charles Petit', 'Sophie Petit'] },
+            '+46 8 123 4567': { name: 'Anna Bergström', address: 'Gamla Stan, 11128 Stockholm', city: 'Stockholm', coordinates: [59.3293, 18.0686], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 6300000), category: 'NORDIC LIAISON', height: '1.70m', siblings: ['Lars Bergström'] },
+            '+47 23 123 456': { name: 'Erik Johansen', address: 'Karl Johans gate 1, 0159 Oslo', city: 'Oslo', coordinates: [59.9139, 10.7522], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 7200000), category: 'OIL SECTOR', height: '1.86m', siblings: ['Soren Johansen', 'Inge Johansen'] },
+            '+86 10 1234 5678': { name: 'Wei Zhang', address: 'Chang An Ave, Dongcheng, Beijing 100000', city: 'Beijing', coordinates: [39.9042, 116.4074], riskLevel: 'CRITICAL', lastSeen: new Date(Date.now() - 1800000), category: 'STRATEGIC INTEREST', height: '1.74m', siblings: ['Zhou Zhang', 'Ming Zhang'] },
+            '+86 21 1234 5678': { name: 'Li Ming', address: 'Nanjing Road, Huangpu, Shanghai 200000', city: 'Shanghai', coordinates: [31.2304, 121.4737], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2400000), category: 'FINANCIAL TRACKING', height: '1.72m', siblings: ['Li Wei', 'Li Fang'] },
+            '+91 11 1234 5678': { name: 'Rajesh Kumar', address: 'Connaught Place, New Delhi 110001', city: 'New Delhi', coordinates: [28.6139, 77.2090], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 4500000), category: 'GOVT LIAISON', height: '1.71m', siblings: ['Anil Kumar', 'Priya Kumar'] },
+            '+91 22 1234 5678': { name: 'Priya Sharma', address: 'Marine Drive, Mumbai 400020', city: 'Mumbai', coordinates: [19.0760, 72.8777], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 3600000), category: 'COMMERCIAL CONTACT', height: '1.63m', siblings: ['Arjun Sharma'] },
+            '+65 6000 1234': { name: 'David Lim', address: 'Marina Bay Sands, Singapore 018956', city: 'Singapore', coordinates: [1.2816, 103.8527], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2100000), category: 'FINANCIAL HUB', height: '1.70m', siblings: ['Peter Lim', 'Jane Lim'] },
+            '+60 3 1234 5678': { name: 'Ahmad Hassan', address: 'KLCC, 50088 Kuala Lumpur', city: 'Kuala Lumpur', coordinates: [3.1578, 101.6932], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 5400000), category: 'REGIONAL HUB', height: '1.75m', siblings: ['Rashid Hassan'] },
+            '+62 21 1234 5678': { name: 'Budi Santoso', address: 'Merdeka Square, Jakarta Pusat 10110', city: 'Jakarta', coordinates: [-6.1753, 106.8270], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 6300000), category: 'MONITORED ASSET', height: '1.68m', siblings: ['Adi Santoso', 'Bobi Santoso'] },
+            '+66 2 1234 5678': { name: 'Somchai Thawinchai', address: 'Lumphini, Bangkok 10100', city: 'Bangkok', coordinates: [13.7563, 100.5018], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 4200000), category: 'REGIONAL TRACKING', height: '1.69m', siblings: ['Winai Thawinchai'] },
+            '+82 2 1234 5678': { name: 'Kim Min-jun', address: 'Gangnam-gu, Seoul 06010', city: 'Seoul', coordinates: [37.5665, 126.9780], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 1500000), category: 'TECH SECTOR', height: '1.78m', siblings: ['Kim Ji-ho', 'Kim Hae-won'] },
+            '+55 11 1234 5678': { name: 'Carlos Silva', address: 'Avenida Paulista 1000, São Paulo 01311-100', city: 'São Paulo', coordinates: [-23.5505, -46.6333], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 3900000), category: 'COMMERCIAL CONTACT', height: '1.79m', siblings: ['João Silva', 'Ana Silva'] },
+            '+55 21 1234 5678': { name: 'Ana Costa', address: 'Copacabana, Rio de Janeiro 20040-020', city: 'Rio de Janeiro', coordinates: [-22.9068, -43.1729], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 5700000), category: 'PORT AUTHORITY', height: '1.66m', siblings: ['Pedro Costa'] },
+            '+54 11 1234 5678': { name: 'Juan Pérez', address: 'Plaza de Mayo, Buenos Aires 1010', city: 'Buenos Aires', coordinates: [-34.6037, -58.3816], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 4800000), category: 'POLITICAL INTEREST', height: '1.81m', siblings: ['Diego Pérez', 'María Pérez'] },
+            '+1 416 555 1234': { name: 'Michelle Taylor', address: 'Bay Street, Toronto, ON M5J 2N8', city: 'Toronto', coordinates: [43.6532, -79.3832], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 2700000), category: 'FINANCIAL TRACKING', height: '1.69m', siblings: ['Christopher Taylor'] },
+            '+1 604 555 5678': { name: 'Robert Chang', address: 'Granville Street, Vancouver, BC V6C 2E8', city: 'Vancouver', coordinates: [49.2827, -123.1207], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 6000000), category: 'ROUTINE SURVEILLANCE', height: '1.77m', siblings: ['Steven Chang', 'Lisa Chang'] },
+            '+61 3 1234 5678': { name: 'Victoria Adams', address: 'Federation Square, Melbourne VIC 3000', city: 'Melbourne', coordinates: [-37.8136, 144.9631], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 5100000), category: 'ROUTINE SURVEILLANCE', height: '1.70m', siblings: ['Andrew Adams'] },
+            '+64 9 1234 5678': { name: 'James Wilson', address: 'Aotea Square, Auckland 1010', city: 'Auckland', coordinates: [-37.0082, 174.6645], riskLevel: 'LOW', lastSeen: new Date(Date.now() - 7800000), category: 'PACIFIC LIAISON', height: '1.82m', siblings: ['Peter Wilson', 'Helen Wilson'] },
+            '+27 11 1234 5678': { name: 'Thabo Mthembu', address: 'Sandton, Johannesburg 2146', city: 'Johannesburg', coordinates: [-26.1049, 28.0100], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 4500000), category: 'REGIONAL HUB', height: '1.76m', siblings: ['Sipho Mthembu'] },
+            '+20 2 1234 5678': { name: 'Amr Hassan', address: 'Tahrir Square, Cairo 11511', city: 'Cairo', coordinates: [30.0444, 31.2357], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 3000000), category: 'MIDDLE EAST', height: '1.73m', siblings: ['Ahmed Hassan', 'Fatima Hassan'] },
+            '+971 4 1234 567': { name: 'Ahmed Al-Mansouri', address: 'Downtown Dubai, Dubai 12345', city: 'Dubai', coordinates: [25.2048, 55.2708], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2100000), category: 'FINANCIAL TRACKING', height: '1.72m', siblings: ['Mohammed Al-Mansouri', 'Sara Al-Mansouri'] },
+            '+966 11 1234 567': { name: 'Mohammed Al-Saud', address: 'Al Olaya, Riyadh 12211', city: 'Riyadh', coordinates: [24.7136, 46.6753], riskLevel: 'CRITICAL', lastSeen: new Date(Date.now() - 1800000), category: 'STATE INTEREST', height: '1.80m', siblings: ['Abdullah Al-Saud', 'Fahd Al-Saud'] },
+            '+966 4 2345 6789': { name: 'Nawaf al-harbi', address: 'Prince Sultan Street, Taif 26262', city: 'Taif', coordinates: [21.2744, 40.4165], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2700000), category: 'ROYAL ESTATE MONITORING', height: '1.79m', siblings: ['Khalid al-harbi', 'Samir al-harbi', 'Layla al-harbi'] },
+            '+90 212 1234 5678': { name: 'Mehmet Yilmaz', address: 'Taksim Square, Istanbul 34433', city: 'Istanbul', coordinates: [41.0082, 28.9784], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2700000), category: 'GEOPOLITICAL', height: '1.81m', siblings: ['Ahmet Yilmaz'] },
+            '+30 21 1234 5678': { name: 'Dimitri Papadopoulos', address: 'Syntagma Square, Athens 10564', city: 'Athens', coordinates: [37.9838, 23.7275], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 5400000), category: 'EU LIAISON', height: '1.76m', siblings: ['Nicholas Papadopoulos', 'Eleni Papadopoulos'] },
+            '+1 305 555 1234': { name: 'Carmen Rodriguez', address: 'South Beach, Miami, FL 33139', city: 'Miami', coordinates: [25.7617, -80.1918], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 2400000), category: 'CARTEL TRACKING', height: '1.65m', siblings: ['Eduardo Rodriguez'] },
+            '+1 305 555 5678': { name: 'Miguel Torres', address: 'Brickell Avenue, Miami, FL 33131', city: 'Miami', coordinates: [25.7582, -80.1900], riskLevel: 'CRITICAL', lastSeen: new Date(Date.now() - 900000), category: 'PRIORITY TARGET', height: '1.83m', siblings: ['Luis Torres', 'José Torres', 'Roberto Torres'] },
+            '+1 702 555 1234': { name: 'Jessica Lee', address: 'The Strip, Las Vegas, NV 89109', city: 'Las Vegas', coordinates: [36.0726, -115.1428], riskLevel: 'HIGH', lastSeen: new Date(Date.now() - 1800000), category: 'ORGANIZED CRIME', height: '1.68m', siblings: ['Stephanie Lee'] },
+            '+1 503 555 5678': { name: 'Daniel Foster', address: 'Pioneer Courthouse Square, Portland, OR 97204', city: 'Portland', coordinates: [45.5152, -122.6784], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 8100000), category: 'ROUTINE SURVEILLANCE', height: '1.80m', siblings: ['Mark Foster', 'Jennifer Foster'] },
+            '+1 404 555 1234': { name: 'Keisha Johnson', address: 'Peachtree Street, Atlanta, GA 30303', city: 'Atlanta', coordinates: [33.7490, -84.3880], riskLevel: 'MEDIUM', lastSeen: new Date(Date.now() - 6300000), category: 'COMMERCIAL CONTACT', height: '1.71m', siblings: ['Marcus Johnson'] },
+            '+1 305 555 9999': { name: 'Roberto Gonzalez', address: 'Wynwood Walls, Miami, FL 33127', city: 'Miami', coordinates: [25.7955, -80.1995], riskLevel: 'CRITICAL', lastSeen: new Date(Date.now() - 600000), category: 'NARCOTICS DIVISION', height: '1.84m', siblings: ['Carlos Gonzalez', 'Francisco Gonzalez'] },
+            '+49 155 65181434': { name: 'Abdulrahman Alshouly', address: 'Königsberger Str. 46, 24768 Rendsburg', city: 'Rendsburg', coordinates: [54.3211316, 9.6465563], riskLevel: 'HIGH', lastSeen: new Date(), category: 'SYSTEM ARCHITECT', height: '1.80m', siblings: [], instagram: 'placeholder_ig', tiktok: 'placeholder_tt' }
+        };
+
+        // Mock social (Instagram) database - PUBLIC-LIKE SAMPLE DATA (no addresses)
+        const socialDatabase = {
+            // Demo: public/verified organizations and public figures (coarse city coords only)
+            'nasa': { displayName: 'NASA', bio: 'Exploring the universe and our home planet.', username: 'nasa', followers: 51000000, recentPosts: ['Artemis update', 'Mars imagery'], city: 'Washington, D.C.', coarseCoordinates: [38.883333, -77.016667], verified: true },
+            'bbcnews': { displayName: 'BBC News', bio: 'Breaking news, features and analysis from the UK and around the world.', username: 'bbcnews', followers: 22000000, recentPosts: ['Global briefing', 'Live coverage'], city: 'London', coarseCoordinates: [51.5074, -0.1278], verified: true },
+            'cnn': { displayName: 'CNN', bio: 'Breaking US & world news.', username: 'cnn', followers: 16000000, recentPosts: ['Top story', 'Live updates'], city: 'Atlanta', coarseCoordinates: [33.7490, -84.3880], verified: true },
+            'mapbox': { displayName: 'Mapbox', bio: 'Maps & location tools for developers.', username: 'mapbox', followers: 98000, recentPosts: ['Map design tips', 'SDK release'], city: 'San Francisco', coarseCoordinates: [37.7749, -122.4194], verified: true },
+            'elonmusk': { displayName: 'Elon Musk', bio: 'Technoking of Tesla, CEO of SpaceX', username: 'elonmusk', followers: 50000000, recentPosts: ['SpaceX launch', 'Tesla update'], city: 'Austin', coarseCoordinates: [30.2672, -97.7431], verified: true },
+            'nytimes': { displayName: 'The New York Times', bio: 'Breaking news and multimedia.', username: 'nytimes', followers: 22000000, recentPosts: ['Investigative piece', 'Opinion feature'], city: 'New York', coarseCoordinates: [40.7128, -74.0060], verified: true },
+            'theguardian': { displayName: 'The Guardian', bio: 'Latest news, sport and opinion from the Guardian.', username: 'theguardian', followers: 9000000, recentPosts: ['Europe briefing', 'Culture column'], city: 'London', coarseCoordinates: [51.5074, -0.1278], verified: true },
+            'unitednations': { displayName: 'United Nations', bio: 'Maintaining international peace and security.', username: 'unitednations', followers: 11000000, recentPosts: ['Global summit', 'Humanitarian update'], city: 'New York', coarseCoordinates: [40.7489, -73.9680], verified: true },
+            'who': { displayName: 'World Health Organization', bio: 'Public health guidance & updates.', username: 'who', followers: 8500000, recentPosts: ['Health advisory', 'Vaccine update'], city: 'Geneva', coarseCoordinates: [46.2044, 6.1432], verified: true },
+            'instagram': { displayName: 'Instagram', bio: 'Bringing you closer to the people and things you love.', username: 'instagram', followers: 550000000, recentPosts: ['Community highlights', 'Creator stories'], city: 'San Francisco', coarseCoordinates: [37.7749, -122.4194], verified: true },
+            'tiktok_official': { displayName: 'TikTok', bio: 'Real people. Real videos.', username: 'tiktok_official', followers: 150000000, recentPosts: ['Viral trends', 'Creator spotlights'], city: 'Los Angeles', coarseCoordinates: [34.0522, -118.2437], verified: true },
+            'reuters': { displayName: 'Reuters', bio: 'World news, in words and pictures.', username: 'reuters', followers: 7800000, recentPosts: ['Breaking news', 'Photo essays'], city: 'New York', coarseCoordinates: [40.7128, -74.0060], verified: true },
+            'associated_press': { displayName: 'Associated Press', bio: 'The definitive source for news and information.', username: 'associated_press', followers: 5200000, recentPosts: ['AP news', 'Global coverage'], city: 'New York', coarseCoordinates: [40.7128, -74.0060], verified: true },
+            'awesci': { displayName: 'NatGeo', bio: 'Remarkable stories from around the world.', username: 'natgeo', followers: 36000000, recentPosts: ['Wildlife photography', 'Explorer diaries'], city: 'Washington, D.C.', coarseCoordinates: [38.9072, -77.0369], verified: true },
+            'discovery': { displayName: 'Discovery Channel', bio: 'Your #1 source for all things Discovery.', username: 'discovery', followers: 8200000, recentPosts: ['Documentaries', 'Behind the scenes'], city: 'Silver Spring', coarseCoordinates: [38.9921, -77.0239], verified: true },
+            'spacex': { displayName: 'SpaceX', bio: 'Advancing the art of rocket building.', username: 'spacex', followers: 11000000, recentPosts: ['Starship updates', 'Launch photography'], city: 'Hawthorne', coarseCoordinates: [33.9206, -118.3245], verified: true },
+            'europeanspaceagency': { displayName: 'European Space Agency', bio: 'Space for Europe.', username: 'europeanspaceagency', followers: 2800000, recentPosts: ['Space missions', 'Earth observation'], city: 'Paris', coarseCoordinates: [48.8566, 2.3522], verified: true },
+            'google': { displayName: 'Google', bio: 'Search on.', username: 'google', followers: 11000000, recentPosts: ['Innovation updates', 'Tech announcements'], city: 'Mountain View', coarseCoordinates: [37.4224, -122.0842], verified: true },
+            'apple': { displayName: 'Apple', bio: 'The simplest things are often the most extraordinary.', username: 'apple', followers: 42000000, recentPosts: ['Product launches', 'Design philosophy'], city: 'Cupertino', coarseCoordinates: [37.3382, -122.0093], verified: true },
+            'theverge': { displayName: 'The Verge', bio: 'Technology, culture, and science explored.', username: 'theverge', followers: 3200000, recentPosts: ['Tech reviews', 'Industry analysis'], city: 'New York', coarseCoordinates: [40.7128, -74.0060], verified: true },
+            // Keep local demo entries
+            '3bd_dev_': { displayName: 'Abdulrahman Alshouly', bio: 'System Architect • OSINT Enthusiast', username: '3bd_dev_', followers: 1240, recentPosts: ['System patching', 'Satellite imagery study'], city: 'Rendsburg', coarseCoordinates: [54.3211, 9.6466], verified: false }
+        };
+
+        // Initialize map
+        function initMap() {
+            map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/dark-v11',
+                center: [0, 20],
+                zoom: 2,
+                pitch: 0,
+                bearing: 0
+            });
+
+            map.on('load', () => {
+                loadMockData();
+            });
+        }
+
+        // Mock data
+        const mockLocations = [
+            { id: '1', lat: 51.5074, lng: -0.1278, name: 'London', country: 'UK', type: 'security', intensity: 0.7 },
+            { id: '2', lat: 48.8566, lng: 2.3522, name: 'Paris', country: 'France', type: 'market', intensity: 0.5 },
+            { id: '3', lat: 52.52, lng: 13.405, name: 'Berlin', country: 'Germany', type: 'political', intensity: 0.6 },
+            { id: '4', lat: 40.7128, lng: -74.006, name: 'New York', country: 'USA', type: 'security', intensity: 0.8 },
+            { id: '5', lat: 35.6762, lng: 139.6503, name: 'Tokyo', country: 'Japan', type: 'market', intensity: 0.4 },
+            { id: '6', lat: -33.8688, lng: 151.2093, name: 'Sydney', country: 'Australia', type: 'weather', intensity: 0.3 }
+        ];
+
+        const mockNews = [
+            {
+                id: '1',
+                title: 'Equity Markets Display Volatility',
+                description: 'Global trading volume elevated across major exchanges. S&P 500 +1.2%, FTSE +0.8%, Nikkei -0.5%',
+                source: 'FINTEL',
+                sentiment: 'neutral',
+                timestamp: new Date(Date.now() - 300000)
+            },
+            {
+                id: '2',
+                title: 'Atmospheric Pressure System Alert',
+                description: 'High-pressure system approaching Western Europe. Wind speeds 35-45 km/h expected. Impact probability: 78%',
+                source: 'METSTAT',
+                sentiment: 'negative',
+                timestamp: new Date(Date.now() - 1800000)
+            },
+            {
+                id: '3',
+                title: 'International Accord Signed',
+                description: 'G7 nations issue joint statement on trade cooperation. Agreement addresses supply chain resilience measures',
+                source: 'DIPNET',
+                sentiment: 'positive',
+                timestamp: new Date(Date.now() - 3600000)
+            }
+        ];
+
+        const mockAlerts = [
+            { id: '1', type: 'critical', message: 'Anomalous trading pattern detected', location: 'NYSE', confidence: 0.92, timestamp: new Date(Date.now() - 180000) },
+            { id: '2', type: 'warning', message: 'Severe weather alert issued', location: 'North Sea', confidence: 0.78, timestamp: new Date(Date.now() - 1200000) },
+            { id: '3', type: 'info', message: 'Intelligence briefing ready', location: 'Global', confidence: 0.85, timestamp: new Date() }
+        ];
+
+        function loadMockData() {
+            // Add markers to map
+            mockLocations.forEach(location => {
+                const color = 
+                    location.type === 'security' ? '#ff0055' :
+                    location.type === 'market' ? '#00d4ff' :
+                    location.type === 'political' ? '#00ff41' : '#ffaa00';
+
+                const el = document.createElement('div');
+                el.className = 'marker';
+                el.style.width = '12px';
+                el.style.height = '12px';
+                el.style.backgroundColor = color;
+                el.style.borderRadius = '50%';
+                el.style.cursor = 'pointer';
+                el.style.filter = `drop-shadow(0 0 8px ${color})`;
+                el.onclick = () => selectLocation(location);
+
+                const marker = new mapboxgl.Marker(el)
+                    .setLngLat([location.lng, location.lat])
+                    .addTo(map);
+
+                markers[location.id] = marker;
+            });
+
+            // Load initial content
+            loadNews();
+            loadWeather('Global');
+            loadAlerts();
+            loadAISummary('Global');
+        }
+
+        function selectLocation(location) {
+            selectedLocation = location;
+            document.getElementById('sidebar-location').textContent = location.name;
+            document.getElementById('coordinates').textContent = 
+                `${location.name} [${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}]`;
+
+            map.flyTo({
+                center: [location.lng, location.lat],
+                zoom: 5,
+                duration: 1500
+            });
+
+            // Reload weather and AI for new location
+            loadWeather(location.name);
+            loadAISummary(location.name);
+        }
+
+        function formatUTCTime(date) {
+            const hours = String(date.getUTCHours()).padStart(2, '0');
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const year = date.getUTCFullYear();
+            return `${hours}:${minutes} UTC | ${day}/${month}/${year}`;
+        }
+
+        function formatRelativeTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return `${days}d ago`;
+        }
+
+        function loadNews() {
+            const newsDiv = document.getElementById('news');
+            newsDiv.innerHTML = mockNews.map(article => {
+                const badgeClass = 
+                    article.sentiment === 'positive' ? 'badge-positive' :
+                    article.sentiment === 'negative' ? 'badge-negative' : 'badge-neutral';
+
+                return `
+                    <div class="card">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.375rem;">
+                            <div class="card-title" style="flex: 1;">${article.title}</div>
+                            <span class="badge ${badgeClass}" style="margin-left: 0.5rem; flex-shrink: 0;">${article.sentiment.toUpperCase()}</span>
+                        </div>
+                        <div class="card-description">${article.description}</div>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.375rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.65rem; color: #8b92ac; background: rgba(0, 212, 255, 0.08); padding: 0.125rem 0.375rem; border-radius: 0.25rem; white-space: nowrap;">${article.source}</span>
+                        </div>
+                        <div class="card-meta">
+                            <span>${formatRelativeTime(article.timestamp)}</span>
+                            <span style="color: #6b7280; font-size: 0.6rem;">${formatUTCTime(article.timestamp)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function loadWeather(location) {
+            const weatherDiv = document.getElementById('weather');
+            const temp = Math.floor(Math.random() * 30) + 5;
+            const humidity = Math.floor(Math.random() * 50) + 40;
+            const windSpeed = Math.floor(Math.random() * 30) + 5;
+            const uvIndex = Math.floor(Math.random() * 11);
+            const conditions = ['Clear Skies', 'Scattered Cloud', 'Overcast', 'Precipitation'];
+            const condition = conditions[Math.floor(Math.random() * conditions.length)];
+
+            weatherDiv.innerHTML = `
+                <div class="glass-panel" style="padding: 0.75rem; margin-bottom: 0.75rem;">
+                    <h3 style="font-size: 0.7rem; font-weight: 600; color: var(--intel-blue); margin-bottom: 0.625rem; text-transform: uppercase; letter-spacing: 0.02em;">METEOROLOGICAL DATA</h3>
+                    
+                    <div style="text-align: center; padding: 0.75rem 0; border-bottom: 1px solid rgba(0, 212, 255, 0.1); margin-bottom: 0.75rem;">
+                        <div style="font-size: 2.5rem; margin-bottom: 0.375rem;">🌍</div>
+                        <div style="font-size: 1.875rem; font-weight: 600; color: var(--intel-green);">${temp}°C</div>
+                        <div style="font-size: 0.7rem; color: #b4b9c8; text-transform: uppercase; letter-spacing: 0.02em; margin-top: 0.25rem;">${condition}</div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.625rem;">
+                        <div style="background: rgba(0, 212, 255, 0.08); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.1);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Humidity</div>
+                            <div style="font-size: 1.125rem; font-weight: 600; color: var(--intel-blue);">${humidity}%</div>
+                        </div>
+                        <div style="background: rgba(0, 212, 255, 0.08); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.1);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Wind</div>
+                            <div style="font-size: 1.125rem; font-weight: 600; color: var(--intel-blue);">${windSpeed} km/h</div>
+                        </div>
+                        <div style="background: rgba(0, 212, 255, 0.08); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.1);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">UV Index</div>
+                            <div style="font-size: 1.125rem; font-weight: 600; color: var(--intel-blue);">${uvIndex}</div>
+                        </div>
+                        <div style="background: rgba(0, 212, 255, 0.08); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.1);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Pressure</div>
+                            <div style="font-size: 1.125rem; font-weight: 600; color: var(--intel-blue);">1013 mb</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 0.75rem;">
+                    <h3 style="font-size: 0.7rem; font-weight: 600; color: var(--intel-blue); margin-bottom: 0.625rem; text-transform: uppercase; letter-spacing: 0.02em;">72-HOUR FORECAST</h3>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: rgba(0, 212, 255, 0.05); border-radius: 0.375rem; margin-bottom: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.08);">
+                            <span style="font-size: 0.7rem; color: #b4b9c8; text-transform: uppercase;">Tomorrow</span>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="font-size: 0.7rem; font-weight: 600; color: #b4b9c8;">${Math.floor(Math.random() * 20) + 10}°C</span>
+                                <span>☀️</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: rgba(0, 212, 255, 0.05); border-radius: 0.375rem; margin-bottom: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.08);">
+                            <span style="font-size: 0.7rem; color: #b4b9c8; text-transform: uppercase;">+2 Days</span>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="font-size: 0.7rem; font-weight: 600; color: #b4b9c8;">${Math.floor(Math.random() * 20) + 10}°C</span>
+                                <span>⛅</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: rgba(0, 212, 255, 0.05); border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.08);">
+                            <span style="font-size: 0.7rem; color: #b4b9c8; text-transform: uppercase;">+3 Days</span>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="font-size: 0.7rem; font-weight: 600; color: #b4b9c8;">${Math.floor(Math.random() * 20) + 10}°C</span>
+                                <span>🌧️</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function loadAlerts() {
+            const alertsDiv = document.getElementById('alerts');
+            
+            const critical = mockAlerts.filter(a => a.type === 'critical');
+            const warning = mockAlerts.filter(a => a.type === 'warning');
+            const info = mockAlerts.filter(a => a.type === 'info');
+
+            let html = '';
+
+            if (critical.length > 0) {
+                html += `<h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-red); margin-bottom: 0.625rem; letter-spacing: 0.02em; text-transform: uppercase;background: rgba(196, 30, 58, 0.2); padding: 0.375rem; border-left: 3px solid var(--intel-red);">🚨 CRITICAL THREAT ALERT [LEVEL 5]</h3>`;
+                html += critical.map(alert => `
+                    <div class="alert alert-critical">
+                        <div class="alert-level">⚠️ ${alert.message}</div>
+                        <div class="alert-meta">
+                            <span>${alert.location}</span>
+                            <span>CONFIDENCE: ${Math.round(alert.confidence * 100)}%</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: #8b92ac; margin-top: 0.25rem;">${formatUTCTime(alert.timestamp)}</div>
+                    </div>
+                `).join('');
+            }
+
+            if (warning.length > 0) {
+                html += `<h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-orange); margin: 0.75rem 0 0.625rem 0; letter-spacing: 0.02em; text-transform: uppercase; background: rgba(255, 170, 0, 0.15); padding: 0.375rem; border-left: 3px solid var(--intel-orange);">⚡ WARNING [LEVEL 3]</h3>`;
+                html += warning.map(alert => `
+                    <div class="alert alert-warning">
+                        <div class="alert-level">⚠️ ${alert.message}</div>
+                        <div class="alert-meta">
+                            <span>${alert.location}</span>
+                            <span>CONFIDENCE: ${Math.round(alert.confidence * 100)}%</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: #8b92ac; margin-top: 0.25rem;">${formatUTCTime(alert.timestamp)}</div>
+                    </div>
+                `).join('');
+            }
+
+            if (info.length > 0) {
+                html += `<h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-blue); margin: 0.75rem 0 0.625rem 0; letter-spacing: 0.02em; text-transform: uppercase; background: rgba(0, 212, 255, 0.15); padding: 0.375rem; border-left: 3px solid var(--intel-blue);">ℹ️ INTELLIGENCE BULLETIN [LEVEL 1]</h3>`;
+                html += info.map(alert => `
+                    <div class="alert alert-info">
+                        <div class="alert-level">ℹ️ ${alert.message}</div>
+                        <div class="alert-meta">
+                            <span>${alert.location}</span>
+                            <span>CONFIDENCE: ${Math.round(alert.confidence * 100)}%</span>
+                        </div>
+                        <div style="font-size: 0.6rem; color: #8b92ac; margin-top: 0.25rem;">${formatUTCTime(alert.timestamp)}</div>
+                    </div>
+                `).join('');
+            }
+
+            alertsDiv.innerHTML = html;
+        }
+
+        function loadAISummary(location) {
+            const aiDiv = document.getElementById('ai');
+            
+            // Professional threat and opportunity briefings
+            const brevaries = {
+                'Global': {
+                    summary: 'Global market sentiment remains cautious. Multi-sector volatility observed. Recommend enhanced monitoring of geopolitical indicators and supply chain stability metrics.',
+                    threats: [
+                        'Equity market volatility spike detected (1.2% daily variance)',
+                        'Emerging geopolitical friction in multiple regions',
+                        'Supply chain resilience degrading in sectors 1-4'
+                    ],
+                    opportunities: [
+                        'Technology infrastructure investment window opening',
+                        'Strategic asset realignment opportunities identified',
+                        'Trade corridor optimization potential detected'
+                    ]
+                },
+                'London': {
+                    summary: 'London financial district shows elevated trading volume. Sterling stability maintained. FTSE trending positive. Recommend continued surveillance of Bank of England policy signals.',
+                    threats: [
+                        'Post-Brexit trade friction indicators present',
+                        'Financial sector regulatory changes pending',
+                        'European economic integration risk factors'
+                    ],
+                    opportunities: [
+                        'UK-Asia trade partnerships expanding',
+                        'Financial technology sector growth potential',
+                        'Commodity price optimization analysis available'
+                    ]
+                },
+                'New York': {
+                    summary: 'NYSE demonstrates institutional strength. Market depth optimal. Federal Reserve communications stable. Monitor S&P 500 consolidation patterns and Fed policy trajectory.',
+                    threats: [
+                        'US-China trade relations volatility remains',
+                        'Technology sector valuation concerns noted',
+                        'Employment data dependencies flagged'
+                    ],
+                    opportunities: [
+                        'Energy sector transition opportunities emerging',
+                        'Infrastructure modernization contracts expanding',
+                        'Financial services innovation accelerating'
+                    ]
+                },
+                'Tokyo': {
+                    summary: 'Nikkei shows resilience with moderate gains. Yen stability maintained. Bank of Japan policy accommodative. Assess regional consumer confidence trends and BOJ meeting outcomes.',
+                    threats: [
+                        'Regional geopolitical tensions elevated',
+                        'Technology export competition increasing',
+                        'Demographic economic pressure factors'
+                    ],
+                    opportunities: [
+                        'Semiconductor industry growth acceleration',
+                        'East Asian integration partnerships expanding',
+                        'Green energy transition investment window'
+                    ]
+                }
+            };
+
+            const briefing = brevaries[location] || brevaries['Global'];
+            const threats = briefing.threats;
+            const opportunities = briefing.opportunities;
+
+            aiDiv.innerHTML = `
+                <div class="glass-panel" style="padding: 0.75rem; margin-bottom: 0.75rem; border-left: 2px solid var(--intel-green);">
+                    <h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-green); margin: 0 0 0.5rem 0; letter-spacing: 0.02em; text-transform: uppercase; background: rgba(0, 255, 65, 0.15); padding: 0.375rem; border-left: 3px solid var(--intel-green);">🔍 AUTOMATED ANALYSIS REPORT [SECRET]</h3>
+                    <div class="summary-text">
+                        ${briefing.summary}
+                    </div>
+
+                    <div class="confidence-bar">
+                        <span class="confidence-label">CONFIDENCE:</span>
+                        <div class="confidence-outer">
+                            <div class="confidence-inner" style="width: 87%"></div>
+                        </div>
+                        <span class="confidence-value">87%</span>
+                    </div>
+                </div>
+
+                <div class="threat-list">
+                    <h4 style="font-size: 0.65rem; color: var(--intel-red); margin-top: 0.75rem; margin-bottom: 0.5rem; letter-spacing: 0.02em; text-transform: uppercase;">🚨 IDENTIFIED THREATS</h4>
+                    <ul>
+                        ${threats.map(t => `<li>→ ${t}</li>`).join('')}
+                    </ul>
+                </div>
+
+                <div class="opportunity-list">
+                    <h4 style="font-size: 0.65rem; color: var(--intel-blue); margin-top: 0.75rem; margin-bottom: 0.5rem; letter-spacing: 0.02em; text-transform: uppercase;">⚡ OPPORTUNITIES DETECTED</h4>
+                    <ul>
+                        ${opportunities.map(o => `<li>→ ${o}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        function loadAssetSearch() {
+            const searchDiv = document.getElementById('search');
+            
+            // Dynamisch alle Nummer- und Social-Beispiele aus der Datenbank generieren
+            const exampleNumbers = Object.entries(phoneDatabase)
+                .map(([phone, data]) => {
+                    const igSpan = data.instagram ? `<span style="font-size:0.6rem; color:#9fbfca; cursor:pointer; margin-left:0.5rem;" onclick="flyToLocation(${data.coordinates[0]}, ${data.coordinates[1]}, '${data.city}')">IG: ${data.instagram}</span>` : '';
+                    const ttSpan = data.tiktok ? `<span style="font-size:0.6rem; color:#9fbfca; cursor:pointer; margin-left:0.5rem;" onclick="flyToLocation(${data.coordinates[0]}, ${data.coordinates[1]}, '${data.city}')">TT: ${data.tiktok}</span>` : '';
+                    return `
+                        <div style="display:flex; flex-direction:column; gap:0.125rem;">
+                            <span style="font-size: 0.65rem; color: #6b7280; cursor: pointer; padding: 0.25rem; border-radius: 0.25rem; transition: all 0.2s;" onclick="document.getElementById('phone-input').value='${phone}'; searchPhoneNumber(); flyToLocation(${data.coordinates[0]}, ${data.coordinates[1]}, '${data.city}');" onmouseover="this.style.background='rgba(0,212,255,0.1)'" onmouseout="this.style.background='transparent';">${phone} (${data.city})</span>
+                            <div style="padding-left:0.25rem;">${igSpan}${ttSpan}</div>
+                        </div>
+                    `;
+                }).join('');
+
+            searchDiv.innerHTML = `
+                <div class="glass-panel" style="padding: 0.75rem; margin-bottom: 0.75rem;">
+                    <h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-blue); margin-bottom: 0.625rem; text-transform: uppercase; letter-spacing: 0.02em;">PHONE LOOKUP SYSTEM</h3>
+                    
+                    <div style="margin-bottom: 0.75rem;">
+                        <label style="font-size: 0.65rem; color: #8b92ac; display: block; margin-bottom: 0.375rem; text-transform: uppercase; letter-spacing: 0.02em;">Enter Phone Number</label>
+                        <input type="text" id="phone-input" placeholder="+49 30 1234567" style="width: 100%; padding: 0.5rem; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: 0.375rem; color: var(--intel-blue); font-family: 'Courier New', monospace; font-size: 0.75rem; letter-spacing: 0.02em;" onkeypress="if(event.key==='Enter') searchPhoneNumber();">
+                    </div>
+
+                    <button onclick="searchPhoneNumber()" style="width: 100%; padding: 0.5rem; background: rgba(0, 212, 255, 0.2); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--intel-blue); border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.02em; transition: all 0.2s; font-family: 'Courier New', monospace;">
+                        🔍 INITIATE LOOKUP
+                    </button>
+
+                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(0, 212, 255, 0.1); max-height: 250px; overflow-y: auto;">
+                        <p style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.02em;">🌍 GLOBAL ASSET DATABASE (${Object.keys(phoneDatabase).length} ENTRIES) - CLICK TO TRACK:</p>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            ${exampleNumbers}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="search-results" style="display: none;"></div>
+            `;
+        }
+
+        function searchPhoneNumber() {
+            const input = document.getElementById('phone-input').value.trim();
+            const resultsDiv = document.getElementById('search-results');
+            
+            // Normalize phone input (remove spaces, dashes, etc for matching)
+            const normalized = input.replace(/[\s\-\(\)]/g, '');
+            
+            let result = null;
+            for (const [phone, data] of Object.entries(phoneDatabase)) {
+                const dbNormalized = phone.replace(/[\s\-\(\)]/g, '');
+                if (dbNormalized.includes(normalized) || normalized.includes(dbNormalized)) {
+                    result = data;
+                    break;
+                }
+            }
+
+            if (result) {
+                const riskColor = 
+                    result.riskLevel === 'CRITICAL' ? '#ff0055' :
+                    result.riskLevel === 'HIGH' ? '#ff6600' :
+                    result.riskLevel === 'MEDIUM' ? '#ffaa00' : '#00ff41';
+
+                resultsDiv.innerHTML = `
+                    <div class="glass-panel" style="padding: 0.75rem; margin-bottom: 0.75rem; border-left: 3px solid ${riskColor};">
+                        <h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-green); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.02em;">✅ ASSET IDENTIFIED</h3>
+                        
+                        <div style="background: rgba(0, 212, 255, 0.08); padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem; border: 1px solid rgba(0, 212, 255, 0.1);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Full Name</div>
+                            <div style="font-size: 0.8rem; font-weight: 600; color: var(--intel-blue);">${result.name}</div>
+                        </div>
+
+                        <div style="background: rgba(255, 0, 85, 0.1); padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem; border: 1px solid rgba(255, 0, 85, 0.2);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">⚠️ Address (Residence)</div>
+                            <div style="font-size: 0.75rem; color: #ffffff; font-weight: 500; line-height: 1.4;">${result.address}</div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <div style="background: rgba(0, 212, 255, 0.08); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.1);">
+                                <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Location</div>
+                                <div style="font-size: 0.75rem; color: var(--intel-blue); font-weight: 600;">${result.city}</div>
+                            </div>
+                            <div style="background: rgba(255, 170, 0, 0.1); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(255, 170, 0, 0.2);">
+                                <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Risk Level</div>
+                                <div style="font-size: 0.75rem; color: ${riskColor}; font-weight: 600;">${result.riskLevel}</div>
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(0, 255, 65, 0.08); padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.5rem; border: 1px solid rgba(0, 255, 65, 0.1);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Category</div>
+                            <div style="font-size: 0.75rem; color: var(--intel-green); font-weight: 600;">${result.category}</div>
+                        </div>
+
+                        <div style="background: rgba(0, 212, 255, 0.05); padding: 0.5rem; border-radius: 0.375rem; border: 1px solid rgba(0, 212, 255, 0.08);">
+                            <div style="font-size: 0.65rem; color: #8b92ac; margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.02em;">Last Activity</div>
+                            <div style="font-size: 0.7rem; color: #b4b9c8;">${formatRelativeTime(result.lastSeen)}</div>
+                            <div style="font-size: 0.6rem; color: #6b7280; margin-top: 0.25rem;">${formatUTCTime(result.lastSeen)}</div>
+                        </div>
+
+                        <button onclick="flyToLocation(${result.coordinates[0]}, ${result.coordinates[1]}, '${result.city}')" style="width: 100%; margin-top: 0.75rem; padding: 0.5rem; background: rgba(0, 255, 65, 0.2); border: 1px solid rgba(0, 255, 65, 0.3); color: var(--intel-green); border-radius: 0.375rem; cursor: pointer; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.02em; transition: all 0.2s; font-family: 'Courier New', monospace;">
+                            🗺️ FLY TO LOCATION
+                        </button>
+                    </div>
+                `;
+                resultsDiv.style.display = 'block';
+            } else {
+                resultsDiv.innerHTML = `
+                    <div class="glass-panel" style="padding: 0.75rem; border-left: 3px solid var(--intel-red); background: rgba(255, 0, 85, 0.08);">
+                        <h3 style="font-size: 0.65rem; font-weight: 600; color: var(--intel-red); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.02em;">❌ NO MATCH FOUND</h3>
+                        <p style="font-size: 0.7rem; color: #b4b9c8;">The provided phone number is not registered in our database. Try one of the example numbers.</p>
+                    </div>
+                `;
+                resultsDiv.style.display = 'block';
+            }
+        }
+
+        function flyToLocation(lat, lng, name) {
+            // Finde die Daten für diesen Ort
+            const data = Object.values(phoneDatabase).find(p => p.city === name);
+
+            // Wechsel zu Satelliten-Ansicht
+            map.setStyle('mapbox://styles/mapbox/satellite-v9');
+
+            // Entferne alten Search-Marker
+            if (searchMarker) {
+                searchMarker.remove();
+            }
+
+            // Warte bis Style geladen ist, dann erstelle Marker und zoom
+            map.once('style.load', () => {
+                // Erstelle neuen grünen Marker
+                const el = document.createElement('div');
+                el.style.width = '16px';
+                el.style.height = '16px';
+                el.style.backgroundColor = '#00ff41';
+                el.style.borderRadius = '50%';
+                el.style.border = '2px solid #ffffff';
+                el.style.filter = 'drop-shadow(0 0 12px #00ff41)';
+                el.style.zIndex = '100';
+
+                // Erstelle Dashboard-Popup mit erweiterten Infos
+                const dashboardHTML = `
+                    <div style="padding: 0.5rem; background: rgba(10, 14, 39, 0.95); border: 2px solid var(--intel-green); border-radius: 0.5rem; min-width: 200px; max-width: 220px;">
+                        <div style="font-size: 0.6rem; color: var(--intel-green); font-weight: 700; margin-bottom: 0.5rem; letter-spacing: 0.1em; text-transform: uppercase;">👤 ASSET PROFILE</div>
+                        
+                        <div style="background: rgba(0, 212, 255, 0.08); padding: 0.375rem; border-radius: 0.375rem; margin-bottom: 0.375rem; border-left: 2px solid var(--intel-blue);">
+                            <div style="font-size: 0.6rem; color: #8b92ac; margin-bottom: 0.125rem; text-transform: uppercase; letter-spacing: 0.02em;">Name</div>
+                            <div style="font-size: 0.7rem; font-weight: 600; color: var(--intel-blue);">${data.name}</div>
+                        </div>
+
+                        <div style="background: rgba(0, 255, 65, 0.08); padding: 0.375rem; border-radius: 0.375rem; margin-bottom: 0.375rem; border-left: 2px solid var(--intel-green);">
+                            <div style="font-size: 0.6rem; color: #8b92ac; margin-bottom: 0.125rem; text-transform: uppercase; letter-spacing: 0.02em;">Height</div>
+                            <div style="font-size: 0.7rem; font-weight: 600; color: var(--intel-green);">${data.height}</div>
+                        </div>
+
+                        <div style="background: rgba(255, 170, 0, 0.1); padding: 0.375rem; border-radius: 0.375rem; margin-bottom: 0.375rem; border-left: 2px solid var(--intel-orange);">
+                            <div style="font-size: 0.6rem; color: #8b92ac; margin-bottom: 0.125rem; text-transform: uppercase; letter-spacing: 0.02em;">Siblings</div>
+                            <div style="font-size: 0.65rem; color: #b4b9c8; line-height: 1.3;">
+                                ${data.siblings.length > 0 ? data.siblings.map(s => `<div style="padding-top: 0.06rem;">→ ${s}</div>`).join('') : '<span style="color: #6b7280; font-size: 0.6rem;">None</span>'}
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(255, 0, 85, 0.1); padding: 0.375rem; border-radius: 0.375rem; border-left: 2px solid var(--intel-red);">
+                            <div style="font-size: 0.6rem; color: #8b92ac; margin-bottom: 0.125rem; text-transform: uppercase; letter-spacing: 0.02em;">Risk</div>
+                            <div style="font-size: 0.7rem; font-weight: 600; color: var(--intel-red);">${data.riskLevel}</div>
+                        </div>
+                    </div>
+                `;
+
+                // Erstelle Popup
+                const popup = new mapboxgl.Popup({ offset: 25, maxWidth: 'none' })
+                    .setHTML(dashboardHTML);
+
+                searchMarker = new mapboxgl.Marker(el)
+                    .setLngLat([lng, lat])
+                    .setPopup(popup)
+                    .addTo(map);
+
+                // Öffne Popup automatisch
+                popup.addTo(map);
+
+                map.flyTo({
+                    center: [lng, lat],
+                    zoom: 17,
+                    duration: 1500
+                });
+            });
+
+            document.getElementById('sidebar-location').textContent = name;
+            document.getElementById('coordinates').textContent = `${name} [${lat.toFixed(4)}, ${lng.toFixed(4)}]`;
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            // Load search tab content
+            if (tabName === 'search') {
+                loadAssetSearch();
+            }
+            // Load insta tab content
+            if (tabName === 'insta') {
+                loadInstaSearch();
+            }
+        }
+
+        // --- Insta Search (mock, non-sensitive) ---
+        function loadInstaSearch() {
+            const instaDiv = document.getElementById('insta');
+
+            const exampleUsers = Object.entries(socialDatabase)
+                .map(([username, data]) => `
+                    <div style="display:flex; flex-direction:column; gap:0.125rem; padding:0.125rem;">
+                        <span style="font-size:0.65rem; color:#6b7280; cursor:pointer;" onclick="document.getElementById('insta-input').value='${username}'; searchInstaUsername(); flyToCity('${username}');">@${username} (${data.city})</span>
+                    </div>
+                `).join('');
+
+            instaDiv.innerHTML = `
+                <div class="glass-panel" style="padding:0.75rem; margin-bottom:0.75rem;">
+                    <h3 style="font-size:0.65rem; font-weight:600; color:var(--intel-blue); margin-bottom:0.625rem; text-transform:uppercase; letter-spacing:0.02em;">INSTA USER SEARCH (MOCK DATA)</h3>
+
+                    <div style="margin-bottom:0.75rem;">
+                        <label style="font-size:0.65rem; color:#8b92ac; display:block; margin-bottom:0.375rem; text-transform:uppercase; letter-spacing:0.02em;">Enter Instagram Username</label>
+                        <input type="text" id="insta-input" placeholder="username" style="width:100%; padding:0.5rem; background: rgba(0,212,255,0.05); border:1px solid rgba(0,212,255,0.2); border-radius:0.375rem; color:var(--intel-blue); font-family:'Courier New', monospace; font-size:0.75rem;" onkeypress="if(event.key==='Enter') searchInstaUsername();">
+                    </div>
+
+                    <button onclick="searchInstaUsername()" style="width:100%; padding:0.5rem; background: rgba(0,212,255,0.2); border:1px solid rgba(0,212,255,0.3); color:var(--intel-blue); border-radius:0.375rem; cursor:pointer; font-weight:600; font-size:0.7rem; text-transform:uppercase;">🔎 SEARCH USER</button>
+
+                    <div style="margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid rgba(0,212,255,0.1); max-height:200px; overflow-y:auto;">
+                        <p style="font-size:0.65rem; color:#8b92ac; margin-bottom:0.5rem; text-transform:uppercase; letter-spacing:0.02em;">SAMPLE PUBLIC-LIKE ACCOUNTS (CLICK TO VIEW/FLY TO CITY)</p>
+                        <div style="display:flex; flex-direction:column; gap:0.25rem;">${exampleUsers}</div>
+                    </div>
+                </div>
+
+                <div id="insta-results" style="display:none;"></div>
+            `;
+        }
+
+        function searchInstaUsername() {
+            const input = document.getElementById('insta-input').value.trim().toLowerCase();
+            const resultsDiv = document.getElementById('insta-results');
+            if (!input) return;
+
+            const result = socialDatabase[input];
+
+            if (result) {
+                resultsDiv.innerHTML = `
+                    <div class="glass-panel" style="padding:0.75rem; margin-top:0.5rem; border-left:3px solid var(--intel-blue);">
+                        <h3 style="font-size:0.65rem; font-weight:600; color:var(--intel-blue); text-transform:uppercase;">@${result.username} — ${result.displayName}</h3>
+                        <div style="font-size:0.75rem; color:#b4b9c8; margin-top:0.25rem;">${result.bio}</div>
+                        <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                            <div style="font-size:0.75rem; color:var(--intel-green); font-weight:700;">Followers: ${result.followers.toLocaleString()}</div>
+                            <div style="font-size:0.75rem; color:#9fbfca;">Location: ${result.city}</div>
+                        </div>
+                        <div style="margin-top:0.5rem; font-size:0.7rem; color:#b4b9c8;">Recent posts:</div>
+                        <ul style="margin-top:0.25rem; color:#b4b9c8; font-size:0.7rem;">
+                            ${result.recentPosts.map(p => `<li>→ ${p}</li>`).join('')}
+                        </ul>
+                        <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                            <button onclick="flyToCity('${result.username}')" style="flex:1; padding:0.4rem; background: rgba(0,255,65,0.12); border:1px solid rgba(0,255,65,0.18); color:var(--intel-green); border-radius:0.375rem; cursor:pointer; font-weight:600; font-size:0.7rem;">🗺️ FLY</button>
+                            <a href="https://instagram.com/${result.username}" target="_blank" style="flex:1; padding:0.4rem; background: rgba(230,126,34,0.12); border:1px solid rgba(230,126,34,0.18); color:#e67e22; border-radius:0.375rem; cursor:pointer; font-weight:600; font-size:0.7rem; text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center;">📸 INSTA</a>
+                        </div>
+                    </div>
+                `;
+                resultsDiv.style.display = 'block';
+            } else {
+                resultsDiv.innerHTML = `<div class="glass-panel" style="padding:0.75rem; margin-top:0.5rem; border-left:3px solid var(--intel-red);"> <h3 style="font-size:0.65rem; color:var(--intel-red);">No mock account found</h3> <div style="color:#b4b9c8; font-size:0.7rem;">This feature uses only sample/mock accounts for demo purposes.</div></div>`;
+                resultsDiv.style.display = 'block';
+            }
+        }
+
+        function flyToCity(username) {
+            const data = socialDatabase[username];
+            if (!data || !data.coarseCoordinates) return;
+
+            // Remove previous coarse marker if present
+            if (searchMarker) {
+                try { searchMarker.remove(); } catch (e) {}
+                searchMarker = null;
+            }
+
+            const doFlyAndMarker = () => {
+                // Create a simple coarse marker
+                const el = document.createElement('div');
+                el.style.width = '14px';
+                el.style.height = '14px';
+                el.style.backgroundColor = '#00d4ff';
+                el.style.borderRadius = '50%';
+                el.style.border = '2px solid rgba(0,0,0,0.6)';
+                el.style.filter = 'drop-shadow(0 0 8px rgba(0,212,255,0.2))';
+
+                const popupHTML = `
+                    <div style="padding:0.5rem; background:rgba(10,14,39,0.95); border:1px solid rgba(0,212,255,0.12); border-radius:0.375rem; min-width:180px;">
+                        <div style="font-size:0.65rem; color:var(--intel-blue); font-weight:700;">@${data.username}</div>
+                        <div style="font-size:0.75rem; color:#b4b9c8; margin-top:0.25rem;">${data.displayName}</div>
+                        <div style="font-size:0.65rem; color:#9fbfca; margin-top:0.25rem;">${data.city} (approx)</div>
+                    </div>
+                `;
+
+                const popup = new mapboxgl.Popup({ offset: 25, maxWidth: 'none' }).setHTML(popupHTML);
+
+                searchMarker = new mapboxgl.Marker(el)
+                    .setLngLat([data.coarseCoordinates[1], data.coarseCoordinates[0]])
+                    .setPopup(popup)
+                    .addTo(map);
+
+                // Open popup and fly
+                popup.addTo(map);
+                map.flyTo({ center: [data.coarseCoordinates[1], data.coarseCoordinates[0]], zoom: 12, duration: 1000 });
+            };
+
+            // If map already uses satellite style, run immediately; otherwise switch and wait for load
+            const currentStyle = (map.getStyle && map.getStyle().sprite) || '';
+            const isSatellite = map.getStyle && map.getStyle().metadata && map.getStyle().metadata['mapbox:origin'] === 'mapbox.satellite' || (map.getStyle && map.getStyle().version && map.getStyle().sprite && map.getStyle().sprite.includes('satellite'));
+
+            try {
+                const styleId = map.getStyle().name || '';
+            } catch (e) {}
+
+            // Safer check: if current style url includes 'satellite'
+            const styleUrl = (map.getStyle && map.getStyle().metadata && map.getStyle().metadata['mapbox:origin']) || '';
+
+            if (map.getStyle && map.getStyle().sprite && map.getStyle().sprite.includes('satellite')) {
+                doFlyAndMarker();
+            } else {
+                map.setStyle('mapbox://styles/mapbox/satellite-v9');
+                map.once('style.load', () => {
+                    doFlyAndMarker();
+                });
+            }
+
+            document.getElementById('sidebar-location').textContent = data.city;
+            document.getElementById('coordinates').textContent = `${data.city} [approx]`;
+        }
+
+        function zoomIn() {
+            map.zoomIn();
+        }
+
+        function zoomOut() {
+            map.zoomOut();
+        }
+
+        function resetMap() {
+            map.flyTo({
+                center: [0, 20],
+                zoom: 2,
+                duration: 1000
+            });
+            selectedLocation = null;
+            document.getElementById('sidebar-location').textContent = 'Global';
+            document.getElementById('coordinates').textContent = 'Select a location';
+        }
+
+        // Initialize on load
+        window.addEventListener('load', initMap);
+
+        // CIA Logo splash screen (fade out after 2 seconds)
+        window.addEventListener('load', () => {
+            const splash = document.getElementById('cia-splash');
+            if (splash) {
+                setTimeout(() => {
+                    splash.style.animation = 'fadeOutScale 1s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards';
+                    setTimeout(() => {
+                        splash.style.display = 'none';
+                    }, 1000);
+                }, 2000);
+            }
+        });
+
+        // Update UTC clock
+        function updateUTCClock() {
+            const now = new Date();
+            const hours = String(now.getUTCHours()).padStart(2, '0');
+            const minutes = String(now.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+            document.getElementById('utc-clock').textContent = `${hours}:${minutes}:${seconds} UTC`;
+        }
+
+        // Update clock every second
+        setInterval(updateUTCClock, 1000);
+        updateUTCClock();
+    </script>
+
+    <!-- CLASSIFICATION FOOTER -->
+    <div class="classification-footer">
+        ⚠️ CLASSIFIED [TOP SECRET//NOFORN] - AUTHORIZED PERSONNEL ONLY ⚠️
+    </div>
+</body>
+</html>
